@@ -20,24 +20,25 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <ScrollViewer Name="scroll" CanContentScroll="True"  Grid.Row="0" Margin="0,0,0,10" Height="Auto">
-            <!-- Список сообщений -->
+        <!-- Внешний ScrollViewer -->
+        <ScrollViewer x:Name="MainScrollViewer" Grid.Row="0" Margin="0,0,0,10"
+                      VerticalScrollBarVisibility="Auto" 
+                      HorizontalScrollBarVisibility="Disabled">
             <ListBox x:Name="lstMessages"
-                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                 ScrollViewer.VerticalScrollBarVisibility="Auto"
-                 Background="#F5F5F5" BorderThickness="1" BorderBrush="#CCC"
-                 ItemsSource="{Binding Messages}">
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                     ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                     Background="#F5F5F5" BorderThickness="1" BorderBrush="#CCC"
+                     ItemsSource="{Binding Messages}">
                 <ListBox.ItemTemplate>
                     <DataTemplate>
                         <Border Margin="4" Padding="8" CornerRadius="8"
-                    Background="{Binding IsUser, Converter={StaticResource UserBackgroundConverter}}">
+                                Background="{Binding IsUser, Converter={StaticResource UserBackgroundConverter}}">
                             <TextBlock Text="{Binding Text}" TextWrapping="Wrap" FontSize="14"/>
                         </Border>
                     </DataTemplate>
                 </ListBox.ItemTemplate>
             </ListBox>
         </ScrollViewer>
-        
 
         <!-- Индикатор загрузки -->
         <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,5" Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}">
@@ -54,9 +55,10 @@
             </Grid.ColumnDefinitions>
 
             <TextBox x:Name="txtInput" Grid.Column="0" Margin="0,0,10,0"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto" 
                      FontSize="14" VerticalContentAlignment="Center"
                      KeyDown="txtInput_KeyDown" AcceptsReturn="True"
-                     MinHeight="30" TextWrapping="Wrap"/>
+                     MaxHeight="90" TextWrapping="Wrap"/>
             <Button x:Name="btnSend" Grid.Column="1" Content="Отправить"
                     Click="btnSend_Click" Padding="15,8" FontSize="14"
                     IsDefault="True" IsEnabled="{Binding IsNotBusy}"/>

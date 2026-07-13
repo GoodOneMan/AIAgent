@@ -82,19 +82,16 @@ namespace AIAgent.UI
         }
 
         /// <summary>
-        /// Прокручивает список вниз после завершения перерисовки элементов.
+        /// Прокручивает внешний ScrollViewer до самого низа.
+        /// Использует Dispatcher для отложенного выполнения после перерисовки.
         /// </summary>
         private void ScrollToEnd()
         {
-            if (lstMessages.Items.Count == 0)
-                return;
-
-            // Откладываем выполнение до тех пор, пока все визуальные изменения не будут применены
             Dispatcher.BeginInvoke(
                 new Action(() =>
                 {
-                    var lastItem = lstMessages.Items[lstMessages.Items.Count - 1];
-                    lstMessages.ScrollIntoView(lastItem);
+                    // Прокручиваем внешний скроллер до конца
+                    MainScrollViewer.ScrollToEnd();
                 }),
                 System.Windows.Threading.DispatcherPriority.Background);
         }
@@ -123,12 +120,11 @@ namespace AIAgent.UI
                     token =>
                     {
                         assistantMessage.Text += token;
-                        // Прокрутка с отложением
                         ScrollToEnd();
                     },
                     _cts.Token);
 
-                // Дополнительная прокрутка после завершения стрима (на случай, если последний токен не вызвал событие)
+                // Дополнительная прокрутка после завершения
                 ScrollToEnd();
             }
             catch (OperationCanceledException)
@@ -140,7 +136,7 @@ namespace AIAgent.UI
             }
             catch (Exception ex)
             {
-                var last = Messages[Messages.Count -1];
+                var last = Messages[Messages.Count - 1];
                 if (last.IsUser == false)
                     last.Text = $"Ошибка: {ex.Message}";
                 else
