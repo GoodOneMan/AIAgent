@@ -20,14 +20,13 @@ namespace AIAgent.UI
     /// </summary>
     public partial class DialogUI : Window
     {
-        // Клиент Ollama создаётся один раз при запуске
-        private readonly AIAgentLib.EntryPoint _chatClient;
+        private readonly AIAgentLib.OllamaClientWrapper _chatClient;
 
         public DialogUI()
         {
             InitializeComponent();
-            // Устанавливаем фокус на поле ввода при загрузке
-            _chatClient = new AIAgentLib.EntryPoint();
+
+            _chatClient = new AIAgentLib.OllamaClientWrapper();
             Loaded += (s, e) => txtInput.Focus();
         }
         
@@ -36,17 +35,12 @@ namespace AIAgent.UI
         /// </summary>
         public async Task<string> Response(string promt)
         {
-            // Вызов API – асинхронный
             var response = await _chatClient.Response(promt);
             return response;
         }
 
         public async Task<string> ResponseChat(string promt)
         {
-            // Вызов API – асинхронный
-            //var response = _chatClient.ResponseChat(promt);
-            //return response.Result;
-
             var response = await _chatClient.ResponseChat(promt);
             return response;
         }
@@ -68,9 +62,7 @@ namespace AIAgent.UI
 
             try
             {
-                // Отправляем промт и получаем ответ
-                //string answer = await Response(text);
-                //lstMessages.Items.Add($"Собеседник: {answer}");
+
                 string answer = await ResponseChat(text);
                 lstMessages.Items.Add($"Собеседник: {answer}");
             }
@@ -91,13 +83,13 @@ namespace AIAgent.UI
                 lstMessages.ScrollIntoView(lstMessages.Items[lstMessages.Items.Count -1]);
         }
 
-        // Обработчик кнопки
+
         private async void btnSend_Click(object sender, RoutedEventArgs e)
         {
             await SendMessageAsync();
         }
 
-        // Обработчик нажатия Enter
+
         private async void txtInput_KeyDown(object sender, KeyEventArgs e)
         {
             if (e.Key == Key.Enter)

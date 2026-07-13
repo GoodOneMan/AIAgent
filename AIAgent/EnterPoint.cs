@@ -25,7 +25,6 @@ namespace AIAgent
             switch (commandId)
             {
                 case "ID_AI_Agent":
-                    //RunAgent();
                     ShowDialog();
                     break;
             }
@@ -37,25 +36,6 @@ namespace AIAgent
             var dialog_ui = new UI.DialogUI();
             dialog_ui.ShowDialog();
             //dialog_ui.Show();
-        }
-
-        public async Task RunAgent()
-        {
-            try
-            {
-                AIAgentLib.EntryPoint entryPoint = new AIAgentLib.EntryPoint();
-
-                //var result = await entryPoint.Start();
-                //var result = await entryPoint.Response("что знаешь о программе Navisworks, расскажи подробно, выведи в виде таблицы в консоль");
-                var result = await entryPoint.Response("найди информацию в интернете о программе Navisworks, выведи ссылки");
-
-                Console.WriteLine(result);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex.Message);
-            }
-
         }
 
         private void LoadAssembly()

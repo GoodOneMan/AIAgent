@@ -10,7 +10,7 @@ namespace TestAIAgentLibConsole
     {
         static async Task Main(string[] args)
         {
-            AIAgentLib.EntryPoint entryPoint = new AIAgentLib.EntryPoint();
+            AIAgentLib.OllamaClientWrapper entryPoint = new AIAgentLib.OllamaClientWrapper();
             var result = await entryPoint.Start();
             Console.WriteLine(result);
         }

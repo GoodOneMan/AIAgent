@@ -7,39 +7,24 @@ using System.Threading.Tasks;
 
 namespace AIAgentLib
 {
-    public class EntryPoint
+    public class OllamaClientWrapper
     {
         OllamaApiClient client = null;
         Chat chat = null;
-        public EntryPoint() 
+        public OllamaClientWrapper() 
         {
+
             client = new OllamaApiClient("http://192.168.2.162:11434", "qwen2.5-coder:14b");
+            //hf.co/empero-ai/Qwythos-9B-Claude-Mythos-5-1M-GGUF:Q8_0
             chat = new Chat(client);
-        }
-
-        public async Task<string> Start()
-        {
-            IChatClient chatClient = new OllamaApiClient("http://192.168.2.162:11434", "qwen2.5-coder:14b");
-
-            var response = await chatClient.GetResponseAsync("как дела");
-
-            return response.Text;
         }
 
         public async Task<string> Response(string promt)
         {
-            IChatClient chatClient = new OllamaApiClient("http://192.168.2.162:11434", "qwen2.5-coder:14b");
-
-            var response = await chatClient.GetResponseAsync(promt);
-
+            var response = await client.GetResponseAsync(promt);
             return response.Text;
         }
 
-        //public Task<string> ResponseChat(string promt)
-        //{
-        //    var response = chat.SendAsync(promt);
-        //    return response.StreamToEndAsync();
-        //}
 
         public async Task<string> ResponseChat(string promt)
         {
@@ -50,13 +35,11 @@ namespace AIAgentLib
                 // Перебираем токены вручную
                 while (await enumerator.MoveNextAsync())
                 {
-                    //Console.Write(enumerator.Current);
                     response += enumerator.Current;
                 }
             }
             finally
             {
-                // Освобождаем ресурсы перечислителя
                 await enumerator.DisposeAsync();
             }
             return response;
