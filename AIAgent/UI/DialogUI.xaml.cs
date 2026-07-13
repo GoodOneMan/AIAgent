@@ -1,102 +1,148 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
+﻿using AIAgentLib;
+using System;
+using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
-using System.Windows.Shapes;
 
 namespace AIAgent.UI
 {
-    /// <summary>
-    /// Логика взаимодействия для DialogUI.xaml
-    /// </summary>
+    public class Message : INotifyPropertyChanged
+    {
+        private string _text;
+        public bool IsUser { get; set; }
+
+        public string Text
+        {
+            get => _text;
+            set { _text = value; OnPropertyChanged(); }
+        }
+
+        public event PropertyChangedEventHandler PropertyChanged;
+        protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = null) =>
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    }
+
+    public class UserBackgroundConverter : System.Windows.Data.IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+        {
+            if (value is bool isUser && isUser)
+                return new SolidColorBrush(Colors.LightBlue);
+            return new SolidColorBrush(Colors.LightGray);
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture) =>
+            throw new NotImplementedException();
+    }
+
     public partial class DialogUI : Window
     {
-        private readonly AIAgentLib.OllamaClientWrapper _chatClient;
+        private readonly OllamaClientWrapper _aiClient;
+        private CancellationTokenSource _cts;
+        private bool _isBusy;
+
+        public ObservableCollection<Message> Messages { get; } = new ObservableCollection<Message>();
+
+        public bool IsBusy
+        {
+            get => _isBusy;
+            set { _isBusy = value; OnPropertyChanged(); OnPropertyChanged(nameof(IsNotBusy)); }
+        }
+        public bool IsNotBusy => !IsBusy;
 
         public DialogUI()
         {
             InitializeComponent();
+            DataContext = this;
 
-            _chatClient = new AIAgentLib.OllamaClientWrapper();
+            var pluginDir = System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
+            var config = Config.Load(pluginDir);
+            _aiClient = new OllamaClientWrapper(config.OllamaUrl, config.ModelName);
+
             Loaded += (s, e) => txtInput.Focus();
         }
-        
-        /// <summary>
-        /// Отправляет промт в модель Ollama и возвращает ответ.
-        /// </summary>
-        public async Task<string> Response(string promt)
-        {
-            var response = await _chatClient.Response(promt);
-            return response;
-        }
-
-        public async Task<string> ResponseChat(string promt)
-        {
-            var response = await _chatClient.ResponseChat(promt);
-            return response;
-        }
-
-        /// <summary>
-        /// Обработка отправки сообщения (асинхронная).
-        /// </summary>
-        private async Task SendMessageAsync()
-        {
-            string text = txtInput.Text.Trim();
-            if (string.IsNullOrEmpty(text))
-                return;
-
-            // Добавляем сообщение пользователя
-            lstMessages.Items.Add($"Вы: {text}");
-            txtInput.Clear();
-            txtInput.IsEnabled = false; // блокируем ввод на время запроса
-            btnSend.IsEnabled = false;
-
-            try
-            {
-
-                string answer = await ResponseChat(text);
-                lstMessages.Items.Add($"Собеседник: {answer}");
-            }
-            catch (Exception ex)
-            {
-                // Если произошла ошибка, покажем её в диалоге
-                lstMessages.Items.Add($"⚠️ Ошибка: {ex.Message}");
-            }
-            finally
-            {
-                txtInput.IsEnabled = true;
-                btnSend.IsEnabled = true;
-                txtInput.Focus();
-            }
-
-            // Прокручиваем список вниз
-            if (lstMessages.Items.Count > 0)
-                lstMessages.ScrollIntoView(lstMessages.Items[lstMessages.Items.Count -1]);
-        }
-
 
         private async void btnSend_Click(object sender, RoutedEventArgs e)
         {
             await SendMessageAsync();
         }
 
-
         private async void txtInput_KeyDown(object sender, KeyEventArgs e)
         {
-            if (e.Key == Key.Enter)
+            // Отправка по Ctrl+Enter
+            if (e.Key == Key.Enter && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
             {
-                await SendMessageAsync();
                 e.Handled = true;
+                await SendMessageAsync();
             }
         }
+
+        private async Task SendMessageAsync()
+        {
+            string text = txtInput.Text.Trim();
+            if (string.IsNullOrEmpty(text) || IsBusy)
+                return;
+
+            Messages.Add(new Message { IsUser = true, Text = text });
+            txtInput.Clear();
+            txtInput.IsEnabled = false;
+            btnSend.IsEnabled = false;
+            IsBusy = true;
+
+            _cts = new CancellationTokenSource();
+
+            try
+            {
+                var assistantMessage = new Message { IsUser = false, Text = "" };
+                Messages.Add(assistantMessage);
+
+                await _aiClient.GetStreamingResponseAsync(
+                    text,
+                    token =>
+                    {
+                        assistantMessage.Text += token;
+                        if (lstMessages.Items.Count > 0)
+                            lstMessages.ScrollIntoView(lstMessages.Items[lstMessages.Items.Count - 1]);
+                    },
+                    _cts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                var last = Messages[Messages.Count -1];
+                if (last.IsUser == false)
+                    last.Text += " (отменено)";
+            }
+            catch (Exception ex)
+            {
+                var last = Messages[Messages.Count - 1];
+                if (last.IsUser == false)
+                    last.Text = $"Ошибка: {ex.Message}";
+                else
+                    Messages.Add(new Message { IsUser = false, Text = $"Ошибка: {ex.Message}" });
+            }
+            finally
+            {
+                _cts?.Dispose();
+                _cts = null;
+                IsBusy = false;
+                txtInput.IsEnabled = true;
+                btnSend.IsEnabled = true;
+                txtInput.Focus();
+            }
+        }
+
+        private void CancelButton_Click(object sender, RoutedEventArgs e)
+        {
+            _cts?.Cancel();
+        }
+
+        public event PropertyChangedEventHandler PropertyChanged;
+        protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = null) =>
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 }

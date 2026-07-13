@@ -1,11 +1,9 @@
 ﻿using Autodesk.Navisworks.Api.Plugins;
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Text;
-using System.Threading.Tasks;
+using System.Windows;
 
 namespace AIAgent
 {
@@ -17,42 +15,50 @@ namespace AIAgent
     [Command("ID_AI_Agent", LargeIcon = @"Images\ai_icon.ico", ToolTip = "агент")]
     public class EnterPoint : CommandHandlerPlugin
     {
-
         public override int ExecuteCommand(string commandId, params string[] parameters)
         {
-            LoadAssembly();
-
-            switch (commandId)
+            if (commandId == "ID_AI_Agent")
             {
-                case "ID_AI_Agent":
-                    ShowDialog();
-                    break;
+                LoadDependencies();
+                ShowDialog();
             }
             return 0;
         }
 
-        public void ShowDialog()
+        private void ShowDialog()
         {
-            var dialog_ui = new UI.DialogUI();
-            dialog_ui.ShowDialog();
-            //dialog_ui.Show();
+            try
+            {
+                var dialog = new UI.DialogUI();
+                dialog.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Не удалось открыть диалог: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
-        private void LoadAssembly()
+        private void LoadDependencies()
         {
-            foreach (string path in Directory.GetFiles(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) + Path.DirectorySeparatorChar + "Assembly"))
+            var pluginDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+            if (string.IsNullOrEmpty(pluginDir))
+                return;
+
+            var assemblyFolder = Path.Combine(pluginDir, "Assembly");
+            if (!Directory.Exists(assemblyFolder))
+                return;
+
+            foreach (var dllPath in Directory.GetFiles(assemblyFolder, "*.dll"))
             {
                 try
                 {
-                    Assembly.LoadFrom(path);
+                    Assembly.LoadFrom(dllPath);
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine(ex.Message);
+                    System.Diagnostics.Debug.WriteLine($"Ошибка загрузки {dllPath}: {ex.Message}");
                 }
             }
-
-            Assembly[] assemblies = AppDomain.CurrentDomain.GetAssemblies();
         }
     }
 }

@@ -1,0 +1,4 @@
+{
+  "OllamaUrl": "http://192.168.2.162:11434",
+  "ModelName": "qwen2.5-coder:14b"
+}

@@ -76,6 +76,7 @@
     </Compile>
   </ItemGroup>
   <ItemGroup>
+    <None Include="AIAgent.json" />
     <None Include="app.config" />
     <None Include="template.name" />
   </ItemGroup>
@@ -102,6 +103,7 @@ mkdir "C:\Program Files\Autodesk\Navisworks Simulate 2020\Plugins\$(TargetName)\
 copy /Y "$(ProjectDir)template.xaml" "C:\Program Files\Autodesk\Navisworks Simulate 2020\Plugins\$(TargetName)\ru-RU\"
 copy /Y "$(ProjectDir)template.name" "C:\Program Files\Autodesk\Navisworks Simulate 2020\Plugins\$(TargetName)\ru-RU\"
 xcopy /Y "$(ProjectDir)Images\*.*" "C:\Program Files\Autodesk\Navisworks Simulate 2020\Plugins\$(TargetName)\Images\"
+xcopy /Y "$(ProjectDir)AIAgent.json" "C:\Program Files\Autodesk\Navisworks Simulate 2020\Plugins\$(TargetName)\"
 xcopy /Y "D:\WorkProject\VisualStudioProject2026\AI_Projects\AINavisworks\AIAgentLib\bin\Debug\*.dll" "C:\Program Files\Autodesk\Navisworks Simulate 2020\Plugins\$(TargetName)\Assembly\"</PostBuildEvent>
   </PropertyGroup>
 </Project>

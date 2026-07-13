@@ -1,53 +1,51 @@
 ﻿using Microsoft.Extensions.AI;
 using OllamaSharp;
-using OllamaSharp.Models.Chat;
 using System;
-using System.Collections.Generic;
+using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace AIAgentLib
 {
     public class OllamaClientWrapper
     {
-        OllamaApiClient client = null;
-        Chat chat = null;
-        public OllamaClientWrapper() 
-        {
+        private readonly OllamaApiClient _client;
+        private readonly Chat _chat;
 
-            client = new OllamaApiClient("http://192.168.2.162:11434", "qwen2.5-coder:14b");
-            //hf.co/empero-ai/Qwythos-9B-Claude-Mythos-5-1M-GGUF:Q8_0
-            chat = new Chat(client);
+        public OllamaClientWrapper(string url, string model)
+        {
+            _client = new OllamaApiClient(url, model);
+            _chat = new Chat(_client);
         }
 
-        public async Task<string> Response(string promt)
+        public async Task<string> GetResponseAsync(string prompt, CancellationToken cancellationToken = default)
         {
-            var response = await client.GetResponseAsync(promt);
-            return response.Text;
+            var response = await _client.GetResponseAsync(prompt, null, cancellationToken).ConfigureAwait(false);
+            return response?.Text ?? string.Empty;
         }
 
-
-        public async Task<string> ResponseChat(string promt)
+        public async Task<string> GetStreamingResponseAsync(
+            string prompt,
+            Action<string> onTokenReceived,
+            CancellationToken cancellationToken = default)
         {
-            IAsyncEnumerator<string> enumerator = chat.SendAsync(promt).GetAsyncEnumerator();
-            string response = "";
+            var fullResponse = new StringBuilder();
+            var enumerator = _chat.SendAsync(prompt, cancellationToken).GetAsyncEnumerator(cancellationToken);
             try
             {
-                // Перебираем токены вручную
                 while (await enumerator.MoveNextAsync())
                 {
-                    response += enumerator.Current;
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var token = enumerator.Current;
+                    fullResponse.Append(token);
+                    onTokenReceived?.Invoke(token);
                 }
             }
             finally
             {
                 await enumerator.DisposeAsync();
             }
-            return response;
-        }
-
-        public void OllamaList()
-        {
-            OllamaApiClient ollamaApi = new OllamaApiClient("http://192.168.2.162:11434", "qwen2.5-coder:14b");
+            return fullResponse.ToString();
         }
     }
 }
