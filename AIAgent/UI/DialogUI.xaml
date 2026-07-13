@@ -20,21 +20,24 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Список сообщений -->
-        <ListBox x:Name="lstMessages" Grid.Row="0" Margin="0,0,0,10"
+        <ScrollViewer Name="scroll" CanContentScroll="True"  Grid.Row="0" Margin="0,0,0,10" Height="Auto">
+            <!-- Список сообщений -->
+            <ListBox x:Name="lstMessages"
                  ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                  ScrollViewer.VerticalScrollBarVisibility="Auto"
                  Background="#F5F5F5" BorderThickness="1" BorderBrush="#CCC"
                  ItemsSource="{Binding Messages}">
-            <ListBox.ItemTemplate>
-                <DataTemplate>
-                    <Border Margin="4" Padding="8" CornerRadius="8"
-                            Background="{Binding IsUser, Converter={StaticResource UserBackgroundConverter}}">
-                        <TextBlock Text="{Binding Text}" TextWrapping="Wrap" FontSize="14"/>
-                    </Border>
-                </DataTemplate>
-            </ListBox.ItemTemplate>
-        </ListBox>
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <Border Margin="4" Padding="8" CornerRadius="8"
+                    Background="{Binding IsUser, Converter={StaticResource UserBackgroundConverter}}">
+                            <TextBlock Text="{Binding Text}" TextWrapping="Wrap" FontSize="14"/>
+                        </Border>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </ScrollViewer>
+        
 
         <!-- Индикатор загрузки -->
         <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,5" Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}">

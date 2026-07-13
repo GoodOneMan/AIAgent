@@ -74,12 +74,29 @@ namespace AIAgent.UI
 
         private async void txtInput_KeyDown(object sender, KeyEventArgs e)
         {
-            // Отправка по Ctrl+Enter
             if (e.Key == Key.Enter && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
             {
                 e.Handled = true;
                 await SendMessageAsync();
             }
+        }
+
+        /// <summary>
+        /// Прокручивает список вниз после завершения перерисовки элементов.
+        /// </summary>
+        private void ScrollToEnd()
+        {
+            if (lstMessages.Items.Count == 0)
+                return;
+
+            // Откладываем выполнение до тех пор, пока все визуальные изменения не будут применены
+            Dispatcher.BeginInvoke(
+                new Action(() =>
+                {
+                    var lastItem = lstMessages.Items[lstMessages.Items.Count - 1];
+                    lstMessages.ScrollIntoView(lastItem);
+                }),
+                System.Windows.Threading.DispatcherPriority.Background);
         }
 
         private async Task SendMessageAsync()
@@ -106,24 +123,29 @@ namespace AIAgent.UI
                     token =>
                     {
                         assistantMessage.Text += token;
-                        if (lstMessages.Items.Count > 0)
-                            lstMessages.ScrollIntoView(lstMessages.Items[lstMessages.Items.Count - 1]);
+                        // Прокрутка с отложением
+                        ScrollToEnd();
                     },
                     _cts.Token);
+
+                // Дополнительная прокрутка после завершения стрима (на случай, если последний токен не вызвал событие)
+                ScrollToEnd();
             }
             catch (OperationCanceledException)
             {
-                var last = Messages[Messages.Count -1];
+                var last = Messages[Messages.Count - 1];
                 if (last.IsUser == false)
                     last.Text += " (отменено)";
+                ScrollToEnd();
             }
             catch (Exception ex)
             {
-                var last = Messages[Messages.Count - 1];
+                var last = Messages[Messages.Count -1];
                 if (last.IsUser == false)
                     last.Text = $"Ошибка: {ex.Message}";
                 else
                     Messages.Add(new Message { IsUser = false, Text = $"Ошибка: {ex.Message}" });
+                ScrollToEnd();
             }
             finally
             {
