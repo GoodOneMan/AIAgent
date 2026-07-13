@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="AIAgent/AIAgent.csproj" Id="377d6012-de14-4100-adc3-d2d50b0fc8a1" />
+  <Project Path="AIAgentLib/AIAgentLib.csproj" Id="c174f108-ddef-4e97-9c64-45c9bb01b8b0" />
+  <Project Path="TestAIAgentLibConsole/TestAIAgentLibConsole.csproj" Id="32d6388c-c737-427d-a335-57e79b93b0af" />
+</Solution>
