@@ -92,6 +92,10 @@
     <Compile Include="UI\DialogUI.xaml.cs">
       <DependentUpon>DialogUI.xaml</DependentUpon>
     </Compile>
+    <Compile Include="UI\DialogViewModel.cs" />
+    <Compile Include="UI\Message.cs" />
+    <Compile Include="UI\RelayCommand.cs" />
+    <Compile Include="UI\UserBackgroundConverter.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Configuration.json" />

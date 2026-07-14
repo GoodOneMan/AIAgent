@@ -1,44 +1,35 @@
 ﻿using AIAgent.Structures;
-using Autodesk.Navisworks.Api;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Runtime;
-using System.Windows.Documents;
 
 namespace AIAgent
 {
     public class Configuration
     {
         private const string ConfigFileName = "Configuration.json";
-        private static Configuration _instance = null;
-        public static Configuration Instance
-        {
-            get
-            {
-                if (_instance == null)
-                    _instance = Init();
+        private static readonly Lazy<Configuration> _instance = new Lazy<Configuration>(Init);
 
-                return _instance;
-            }
-        }
+        public static Configuration Instance => _instance.Value;
 
         private static Configuration Init()
         {
-            string path = Path.Combine(Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), ConfigFileName);
+            string path = Path.Combine(
+                Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location),
+                ConfigFileName);
             try
             {
                 if (File.Exists(path))
                 {
-                    return JsonConvert.DeserializeObject<Configuration>(File.ReadAllText(path));
+                    string json = File.ReadAllText(path);
+                    return JsonConvert.DeserializeObject<Configuration>(json) ?? new Configuration();
                 }
             }
-            catch (System.Exception ex)
+            catch (Exception ex)
             {
-
+                System.Diagnostics.Trace.WriteLine($"Ошибка загрузки конфигурации: {ex.Message}");
             }
-            
             return new Configuration();
         }
 
@@ -46,21 +37,20 @@ namespace AIAgent
         public string ModelName { get; set; } = "qwen2.5-coder:14b";
         public int GeometryHandler { get; set; } = 1;
         public int Optimization { get; set; } = 0;
-        
         public List<string> Categories { get; set; } = new List<string>();
 
+        // Метод перенесён в отдельный сервис, но оставлен для совместимости
         public string GetJsonElementDto(List<ElementDto> elementDtos)
         {
-            string json = "";
             try
             {
-                json = JsonConvert.SerializeObject(elementDtos, Formatting.Indented);
+                return JsonConvert.SerializeObject(elementDtos, Formatting.Indented);
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
-
+                System.Diagnostics.Trace.WriteLine($"Ошибка сериализации: {ex.Message}");
+                return string.Empty;
             }
-            return json;
         }
     }
 }
