@@ -1,0 +1,1290 @@
+
+//===== Configuration.cs =====
+
+using AIAgent.Structures;
+using Autodesk.Navisworks.Api;
+using Newtonsoft.Json;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Runtime;
+using System.Windows.Documents;
+
+namespace AIAgent
+{
+    public class Configuration
+    {
+        private const string ConfigFileName = "Configuration.json";
+        private static Configuration _instance = null;
+        public static Configuration Instance
+        {
+            get
+            {
+                if (_instance == null)
+                    _instance = Init();
+
+                return _instance;
+            }
+        }
+
+        private static Configuration Init()
+        {
+            string path = Path.Combine(Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), ConfigFileName);
+            try
+            {
+                if (File.Exists(path))
+                {
+                    return JsonConvert.DeserializeObject<Configuration>(File.ReadAllText(path));
+                }
+            }
+            catch (System.Exception ex)
+            {
+
+            }
+            
+            return new Configuration();
+        }
+
+        public string OllamaUrl { get; set; } = "http://192.168.2.162:11434";
+        public string ModelName { get; set; } = "qwen2.5-coder:14b";
+        public int GeometryHandler { get; set; } = 1;
+        public int Optimization { get; set; } = 0;
+        
+        public List<string> Categories { get; set; } = new List<string>();
+
+        public string GetJsonElementDto(List<ElementDto> elementDtos)
+        {
+            string json = "";
+            try
+            {
+                json = JsonConvert.SerializeObject(elementDtos, Formatting.Indented);
+            }
+            catch(Exception ex)
+            {
+
+            }
+            return json;
+        }
+    }
+}
+
+//===== EnterPoint.cs =====
+
+using AIAgent.Model;
+using AIAgent.Structures;
+using Autodesk.Navisworks.Api;
+using Autodesk.Navisworks.Api.Plugins;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Reflection;
+using System.Windows;
+using System.Xml.Linq;
+
+namespace AIAgent
+{
+    [Plugin("AIAgent", "TZ", DisplayName = "Assistant")]
+    [Strings("template.name")]
+    [RibbonLayout("template.xaml")]
+    [RibbonTab("ID_Template_Tab")]
+    [Command("ID_Select_Button", LargeIcon = @"Images\Select_Button.ico", ToolTip = "Выбор действия")]
+    [Command("ID_AI_Agent", LargeIcon = @"Images\ai_icon.ico", ToolTip = "агент")]
+    public class EnterPoint : CommandHandlerPlugin
+    {
+        public EnterPoint() 
+        {
+            LoadDependencies();
+        }
+
+        public override int ExecuteCommand(string commandId, params string[] parameters)
+        {
+            if (commandId == "ID_AI_Agent")
+            {
+                ShowDialog();
+            }
+            return 0;
+        }
+
+        private void ShowDialog()
+        {
+            try
+            {
+                var dialog = new UI.DialogUI();
+                dialog.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Не удалось открыть диалог: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void LoadDependencies()
+        {
+            var pluginDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+            if (string.IsNullOrEmpty(pluginDir))
+                return;
+
+            var assemblyFolder = Path.Combine(pluginDir, "Assembly");
+            if (!Directory.Exists(assemblyFolder))
+                return;
+
+            foreach (var dllPath in Directory.GetFiles(assemblyFolder, "*.dll"))
+            {
+                try
+                {
+                    Assembly.LoadFrom(dllPath);
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Ошибка загрузки {dllPath}: {ex.Message}");
+                }
+            }
+        }
+    }
+}
+
+//===== Model\Extractor.cs =====
+
+using Autodesk.Navisworks.Api;
+using Autodesk.Navisworks.Api.Interop.ComApi;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace AIAgent.Model
+{
+    class Extractor
+    {
+        protected bool compare_box(InwLBox3f box_com, BoundingBox3D box_net)
+        {
+            if (box_com.max_pos.data1 != box_net.Max.X || box_com.max_pos.data2 != box_net.Max.Y || box_com.max_pos.data3 != box_net.Max.Z ||
+               box_com.min_pos.data1 != box_net.Min.X || box_com.min_pos.data2 != box_net.Min.Y || box_com.min_pos.data3 != box_net.Min.Z)
+                return false;
+            return true;
+        }
+        protected bool compare_box(double[] box1, double[] box2)
+        {
+            if (!box1.SequenceEqual(box2))
+                return false;
+            return true;
+        }
+        protected bool compare_point(double[] matrix, Point3D center)
+        {
+            if (matrix[12] != center.X || matrix[13] != center.Y || matrix[14] != center.Z)
+                return false;
+            else
+                return true;
+        }
+
+        protected double[] present_matrix(Array matrix)
+        {
+            double[] _matrix = new double[16];
+
+            for (int i = 0; i < 16; i++)
+            {
+                _matrix[i] = (double)matrix.GetValue(i + 1);
+            }
+
+            return _matrix;
+        }
+        protected double[] present_color(Color color)
+        {
+            return new double[] { color.R, color.G, color.B };
+        }
+        protected double[] present_box(BoundingBox3D box)
+        {
+            return new double[] { box.Min.X, box.Min.Y, box.Min.Z, box.Max.X, box.Max.Y, box.Max.Z };
+        }
+        protected double[] present_box(InwLBox3f box)
+        {
+            return new double[] { box.min_pos.data1, box.min_pos.data2, box.min_pos.data3, box.max_pos.data1, box.max_pos.data2, box.max_pos.data3 };
+        }
+
+    }
+}
+
+//===== Model\GeometryExtractor.cs =====
+
+using AIAgent.Structures;
+using Autodesk.Navisworks.Api;
+using Autodesk.Navisworks.Api.ComApi;
+using Autodesk.Navisworks.Api.Interop.ComApi;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Runtime;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace AIAgent.Model
+{
+    class GeometryExtractor : Extractor
+    {
+        int counter = 0;
+        Dictionary<ModelItem, List<Element>> Elements = new Dictionary<ModelItem, List<Element>>();
+        Dictionary<int, int> duplicate_geometry = new Dictionary<int, int>();
+
+        double measurement = 0;
+
+        public GeometryExtractor() { }
+
+        public Dictionary<ModelItem, List<Element>> Run()
+        {
+            if (Application.ActiveDocument.Models.Count == 0)
+                return null;
+
+            Dictionary<ModelItem, ModelItemCollection> models_selection = new Dictionary<ModelItem, ModelItemCollection>();
+
+            measurement = Measurement.GetValue(Application.ActiveDocument.Models[0].Units.ToString());
+
+            foreach (ModelItem item in Application.ActiveDocument.CurrentSelection.SelectedItems)
+            {
+                models_selection.Add(item, new ModelItemCollection());
+
+                if (item.HasGeometry)
+                {
+                    models_selection[item].Add(item);
+                }
+                else
+                {
+                    models_selection[item].AddRange(SearchByCategory(new ModelItemCollection() { item }, "LcOpGeometryProperty", "Геометрия"));
+                }
+
+                counter += models_selection[item].Count;
+            }
+
+            foreach (var item in models_selection)
+            {
+                if (Configuration.Instance.GeometryHandler == 1)
+                {
+                    Elements.Add(item.Key, GeometryHandlerFast(item.Value));
+                }
+                else
+                {
+                    Elements.Add(item.Key, GeometryHandler(item.Value));
+                }
+            }
+
+            return Elements;
+        }
+
+        private List<Element> GeometryHandlerFast(ModelItemCollection collection)
+        {
+            List<Element> elements = new List<Element>();
+
+            foreach (var item in collection)
+            {
+                if (duplicate_geometry.ContainsKey(item.InstanceHashCode))
+                {
+                    duplicate_geometry[item.InstanceHashCode] += 1;
+                }
+                else
+                {
+                    duplicate_geometry.Add(item.InstanceHashCode, 1);
+
+                    ModelGeometry geometry = item.Geometry;
+
+                    SimplePrimitivesImplementation SimplePrimitivesCB = new SimplePrimitivesImplementation();
+                    InwOaPath oaPath = ComApiBridge.ToInwOaPath(item);
+                    InwNodeFragsColl collection_frag = oaPath.Fragments();
+
+                    int fragments_com = collection_frag.Count;
+                    int fragments_net = geometry.FragmentCount;
+
+                    for (int index_com = 1; index_com <= fragments_com;)
+                    {
+                        Element element = new Element(item);
+                        element.Measurement = measurement;
+
+                        element.Geometry = CreateGeometry(geometry);
+
+                        for (int index_net = 1; index_net <= fragments_net; index_net++)
+                        {
+                            InwOaFragment3 inwFragment = collection_frag[index_com];
+                            SimplePrimitivesCB.Vertices = new List<Point>();
+                            SimplePrimitivesCB.Lines = new List<Line>();
+                            inwFragment.GenerateSimplePrimitives(nwEVertexProperty.eNORMAL, SimplePrimitivesCB);
+
+                            if (SimplePrimitivesCB.Vertices.Count > 0)
+                            {
+                                Fragment fragment = CreateFragment(inwFragment, SimplePrimitivesCB);
+                                element.Geometry.Fragments.Add(fragment);
+                                element.VetexCount += fragment.Triangles.Item2.Length;
+                            }
+
+                            index_com++;
+                        }
+
+                        if (element.Geometry.Fragments.Count > 0)
+                        {
+                            element.ModelItem = item;
+                            elements.Add(element);
+
+                            Console.WriteLine($"{counter--} {element.VetexCount}");
+                        }
+                        else
+                        {
+                            Console.WriteLine($"{counter--} {element.VetexCount} Null count");
+                        }
+                    }
+                }
+            }
+
+            return elements;
+        }
+
+        private List<Element> GeometryHandler(ModelItemCollection collection)
+        {
+            List<Element> elements = new List<Element>();
+
+            foreach (var item in collection)
+            {
+                ModelGeometry geometry = item.Geometry;
+
+                SimplePrimitivesImplementation SimplePrimitivesCB = new SimplePrimitivesImplementation();
+                InwOaPath oaPath = ComApiBridge.ToInwOaPath(item);
+                InwNodeFragsColl collection_frag = oaPath.Fragments();
+
+                Element element = new Element(item);
+                element.Measurement = measurement;
+
+                element.Geometry = CreateGeometry(geometry);
+
+                int fragments_com = collection_frag.Count;
+                int fragments_net = geometry.FragmentCount;
+
+                for (int index_com = 1; index_com <= fragments_com; index_com++)
+                {
+                    InwOaFragment3 inwFragment = collection_frag[index_com];
+
+                    //if(instance_set.Contains(ComApiBridge.ToModelItem(inwFragment.path).Geometry.GetHashCode()))
+                    //    continue;
+
+                    if (geometry.GetHashCode() != ComApiBridge.ToModelItem(inwFragment.path).Geometry.GetHashCode())
+                        continue;
+
+                    //instance_set.Add(ComApiBridge.ToModelItem(inwFragment.path).Geometry.GetHashCode());
+
+                    SimplePrimitivesCB.Vertices = new List<Point>();
+                    SimplePrimitivesCB.Lines = new List<Line>(); ;
+                    inwFragment.GenerateSimplePrimitives(nwEVertexProperty.eNORMAL, SimplePrimitivesCB);
+
+                    if (SimplePrimitivesCB.Vertices.Count > 0)
+                    {
+                        Fragment fragment = CreateFragment(inwFragment, SimplePrimitivesCB);
+                        element.Geometry.Fragments.Add(fragment);
+                        element.VetexCount += fragment.Triangles.Item2.Length;
+                    }
+                }
+
+                if (element.Geometry.Fragments.Count > 0)
+                {
+                    element.ModelItem = item;
+                    elements.Add(element);
+
+                    Console.WriteLine($"{counter--} {element.VetexCount}");
+                }
+                else
+                {
+                    Console.WriteLine($"{counter--} {element.VetexCount} Null count");
+                }
+            }
+
+            return elements;
+        }
+
+        private Geometry CreateGeometry(ModelGeometry modelGeometry)
+        {
+            Geometry geometry = new Geometry();
+            geometry.Color = present_color(modelGeometry.ActiveColor);
+            geometry.BoundingBox = present_box(modelGeometry.BoundingBox);
+            geometry.Transparency = modelGeometry.ActiveTransparency;
+            geometry.Fragments = new List<Fragment>();
+
+            return geometry;
+        }
+
+        private Fragment CreateFragment(InwOaFragment3 inwFragment, SimplePrimitivesImplementation SimplePrimitivesCB)
+        {
+            Fragment fragment = new Fragment();
+            fragment.Matrix = present_matrix((Array)(object)inwFragment.GetLocalToWorldMatrix().Matrix);
+            fragment.Lines = SimplePrimitivesCB.Lines.ToArray();
+            if (Configuration.Instance.Optimization == 0)
+                fragment.Triangles = NoOptimize(SimplePrimitivesCB.Vertices);
+            else
+                fragment.Triangles = Optimize(SimplePrimitivesCB.Vertices.ToArray());
+
+            return fragment;
+        }
+
+        private Tuple<Point[], uint[]> NoOptimize(List<Point> points)
+        {
+            if (points == null || points.Count == 0)
+            {
+                return Tuple.Create(new Point[0], new uint[0]);
+            }
+
+            // Создаем словарь для хранения уникальных точек и их индексов
+            Dictionary<Point, uint> pointToIndex = new Dictionary<Point, uint>();
+            List<Point> uniquePoints = new List<Point>();
+            List<uint> indices = new List<uint>();
+
+            uint currentIndex = 0;
+
+            // Проходим по всем точкам и создаем уникальный список
+            foreach (Point point in points)
+            {
+                if (!pointToIndex.ContainsKey(point))
+                {
+                    pointToIndex[point] = currentIndex;
+                    uniquePoints.Add(point);
+                    currentIndex++;
+                }
+
+                // Добавляем индекс текущей точки в массив индексов
+                indices.Add(pointToIndex[point]);
+            }
+
+            return Tuple.Create(uniquePoints.ToArray(), indices.ToArray());
+        }
+        private Tuple<Point[], uint[]> Optimize(Point[] points)
+        {
+            return  MeshOptimizer.Optimize(points, null, Point.SizeInBytes, 1.5f);
+        }
+
+        private ModelItemCollection SearchByCategory(ModelItemCollection collection, string internal_name = "", string user_name = "")
+        {
+            InwOpState10 opState = ComApiBridge.State;
+
+            InwOpSelectionSet2 opSelSet2 = (InwOpSelectionSet2)(object)opState.ObjectFactory(nwEObjectType.eObjectType_nwOpSelectionSet);
+            opSelSet2.name = "ByCategorySelection";
+
+            InwOpFindSpec opFindSpec = (InwOpFindSpec)(object)opState.ObjectFactory(nwEObjectType.eObjectType_nwOpFindSpec);
+            InwOpFindCondition opFindCondition = (InwOpFindCondition)(object)opState.ObjectFactory(nwEObjectType.eObjectType_nwOpFindCondition);
+
+            opFindCondition.SetAttributeNames(internal_name, user_name);
+            opFindCondition.Condition = nwEFindCondition.eFind_HAS_ATTRIB;
+
+            opFindSpec.selection = ComApiBridge.ToInwOpSelection(collection);
+
+            opFindSpec.SearchMode = nwESearchMode.eSearchMode_ALL_PATHS;
+            opFindSpec.ResultDisjoint = false;
+            opFindSpec.Conditions().Add(opFindCondition);
+
+            opSelSet2.ImplicitFindSpec = opFindSpec;
+
+            return ComApiBridge.ToModelItemCollection(opSelSet2.selection);
+        }
+    }
+}
+
+//===== Model\InformationExtractor.cs =====
+
+using AIAgent.Structures;
+using Autodesk.Navisworks.Api;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Runtime;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace AIAgent.Model
+{
+    internal class InformationExtractor
+    {
+        List<Element> elements = null;
+
+        public InformationExtractor(List<Element> elements)
+        {
+            this.elements = elements;
+        }
+
+        public List<Element> GetElements()
+        {
+            foreach (Element element in elements)
+            {
+                element.PropertyCategories = DataItem(element.ModelItem);
+            }
+
+            return elements;
+        }
+
+        private List<PropertyCategory> DataItem(ModelItem item)
+        {
+            List<PropertyCategory> categories = new List<PropertyCategory>();
+
+            while (true)
+            {
+                ModelItem parent = item.Parent;
+
+                if (parent == null)
+                    return null;
+
+                foreach (var str in Configuration.Instance.Categories)
+                {
+                    var arr = str.Split(':');
+                    PropertyCategory category = parent.PropertyCategories.FindCategoryByCombinedName(new NamedConstant(arr[0].Trim(), arr[1].Trim()));
+
+                    if (category != null)
+                        categories.Add(category);
+
+                }
+
+
+                if (categories.Count == 0)
+                {
+                    item = parent;
+                    Console.WriteLine($"{item.GetHashCode()}  not data");
+                }
+                else
+                {
+                    Console.WriteLine($"{item.GetHashCode()}  find data");
+                    return categories;
+                }
+            }
+        }
+    }
+}
+
+//===== Model\MeshOptimizer.cs =====
+
+using AIAgent.Structures;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Runtime;
+using System.Runtime.InteropServices;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace AIAgent.Model
+{
+    public static class MeshOptimizer
+    {
+        public static Tuple<T[], uint[]> SimplifyMesh<T>(T[] Vertices, uint[] Indices, uint VertexSize, float Threshold)
+        {
+            uint[] destination = new uint[Indices.Length];
+            //uint[] Indices = Indices;
+            UIntPtr IndexCount = (UIntPtr)Indices.Length;
+            Pointer VertexPositions = Pointer.Create(Vertices);
+            UIntPtr VertexCount = (UIntPtr)Vertices.Length;
+            UIntPtr VertexPositionsStride = (UIntPtr)VertexSize;
+            UIntPtr TargetIndexCount = (UIntPtr)(Indices.Length * Threshold);
+            float TargetError = 0f;
+            UIntPtr Options = (UIntPtr)0;
+            IntPtr ResultError = (IntPtr)0;
+
+            UInt32 result = 0;
+
+            TargetError = 1e-2f;
+            result = MeshOptimizerNative.Simplify(destination, Indices, IndexCount, VertexPositions.Address, VertexCount, VertexPositionsStride, TargetIndexCount, TargetError, Options, ResultError);
+
+            VertexPositions.Free();
+
+            Array.Resize(ref destination, (int)result);
+
+            return Optimize(Vertices, destination, Point.SizeInBytes, 1.5f);
+
+        }
+
+
+        public static Tuple<T[], uint[]> Optimize<T>(T[] Vertices, uint[] Indices, uint VertexSize, float Threshold)
+        {
+            var results = Reindex(Vertices, Indices, VertexSize);
+            var vertices = results.Item1;
+            var indices = results.Item2;
+
+            OptimizeCache(indices, vertices.Length);
+            OptimizeOverdraw(indices, vertices, VertexSize, Threshold);
+            OptimizeVertexFetch(indices, vertices, VertexSize);
+            return Tuple.Create(vertices, indices);
+        }
+
+
+        public static Tuple<T[], uint[]> Reindex<T>(T[] Vertices, uint[] Indices, uint VertexSize)
+        {
+            var remap = new uint[Vertices.Length];
+            var vertexPointer = Pointer.Create(Vertices);
+            var indexCount = (Indices?.Length ?? Vertices.Length);
+            var totalVertices = MeshOptimizerNative.GenerateVertexRemap(
+                remap,
+                Indices,
+                (UIntPtr)indexCount,
+                vertexPointer.Address,
+                (UIntPtr)Vertices.Length,
+                (UIntPtr)VertexSize
+            );
+
+            var indices = new uint[indexCount];
+            MeshOptimizerNative.RemapIndexBuffer(indices, Indices, (UIntPtr)indexCount, remap);
+
+            var vertices = new T[totalVertices];
+            var targetVerticesPointer = Pointer.Create(vertices);
+            MeshOptimizerNative.RemapVertexBuffer(targetVerticesPointer.Address, vertexPointer.Address, (UIntPtr)Vertices.Length, (UIntPtr)VertexSize, remap);
+
+            vertexPointer.Free();
+            targetVerticesPointer.Free();
+            return Tuple.Create(vertices, indices);
+        }
+
+
+        public static void OptimizeCache(uint[] Indices, int VertexCount)
+        {
+            MeshOptimizerNative.OptimizeVertexCache(Indices, Indices, (UIntPtr)Indices.Length, (UIntPtr)VertexCount);
+        }
+
+
+        public static void OptimizeOverdraw<T>(uint[] Indices, T[] Vertices, uint Stride, float Threshold)
+        {
+            var pointer = Pointer.Create(Vertices);
+            MeshOptimizerNative.OptimizeOverdraw(Indices, Indices, (UIntPtr)Indices.Length, pointer.Address, (UIntPtr)Vertices.Length, (UIntPtr)Stride, Threshold);
+            pointer.Free();
+        }
+
+
+        public static void OptimizeVertexFetch<T>(uint[] Indices, T[] Vertices, uint VertexSize)
+        {
+            var pointer = Pointer.Create(Vertices);
+            MeshOptimizerNative.OptimizeVertexFetch(pointer.Address, Indices, (UIntPtr)Indices.Length, pointer.Address, (UIntPtr)Vertices.Length, (UIntPtr)VertexSize);
+            pointer.Free();
+        }
+    }
+
+    internal static class MeshOptimizerNative
+    {
+        //private const string MeshOptimizerDLL = @"C:\Program Files\Autodesk\Navisworks Manage 2023\Plugins\ImportDataOPM\Xbim\meshoptimizer.dll";
+
+        private const string MeshOptimizerDLL = "opt.dll";
+
+        [DllImport(MeshOptimizerDLL, CharSet = CharSet.Auto, CallingConvention = CallingConvention.Cdecl)]
+        private static extern uint meshopt_generateVertexRemap(uint[] Destination, uint[] Indices, UIntPtr IndexCount, IntPtr Vertices, UIntPtr VertexCount, UIntPtr VertexSize);
+
+        [DllImport(MeshOptimizerDLL, CharSet = CharSet.Auto, CallingConvention = CallingConvention.Cdecl)]
+        private static extern void meshopt_remapIndexBuffer(uint[] Destination, uint[] Indices, UIntPtr IndexCount, uint[] Remap);
+
+        [DllImport(MeshOptimizerDLL, CharSet = CharSet.Auto, CallingConvention = CallingConvention.Cdecl)]
+        private static extern void meshopt_remapVertexBuffer(IntPtr Destination, IntPtr Vertices, UIntPtr VertexCount, UIntPtr VertexSize, uint[] Remap);
+
+        [DllImport(MeshOptimizerDLL, CharSet = CharSet.Auto, CallingConvention = CallingConvention.Cdecl)]
+        private static extern void meshopt_optimizeVertexCache(uint[] Destination, uint[] Indices, UIntPtr IndexCount, UIntPtr VertexCount);
+
+        [DllImport(MeshOptimizerDLL, CharSet = CharSet.Auto, CallingConvention = CallingConvention.Cdecl)]
+        private static extern void meshopt_optimizeOverdraw(uint[] Destination, uint[] Indices, UIntPtr IndexCount, IntPtr VertexPositions, UIntPtr VertexCount, UIntPtr Stride, float Threshold);
+
+        [DllImport(MeshOptimizerDLL, CharSet = CharSet.Auto, CallingConvention = CallingConvention.Cdecl)]
+        private static extern uint meshopt_optimizeVertexFetch(IntPtr Destination, uint[] Indices, UIntPtr IndexCount, IntPtr Vertices, UIntPtr VertexCount, UIntPtr VertexSize);
+
+        [DllImport(MeshOptimizerDLL, CharSet = CharSet.Auto, CallingConvention = CallingConvention.Cdecl)]
+        private static extern uint meshopt_simplify(uint[] Destination, uint[] Indices, UIntPtr IndexCount, IntPtr VertexPositions, UIntPtr VertexCount, UIntPtr VertexPositionsStride, UIntPtr TargetIndexCount, float TargetError, UIntPtr Options, IntPtr ResultError);
+
+        [DllImport(MeshOptimizerDLL, CharSet = CharSet.Auto, CallingConvention = CallingConvention.Cdecl)]
+        private static extern uint meshopt_simplifySloppy(uint[] Destination, uint[] Indices, UIntPtr IndexCount, IntPtr VertexPositions, UIntPtr VertexCount, UIntPtr VertexPositionsStride, UIntPtr TargetIndexCount, float TargetError, UIntPtr Options, IntPtr ResultError);
+
+        public static uint GenerateVertexRemap(uint[] Destination, uint[] Indices, UIntPtr IndexCount, IntPtr Vertices, UIntPtr VertexCount, UIntPtr VertexSize)
+        {
+            return meshopt_generateVertexRemap(Destination, Indices, IndexCount, Vertices, VertexCount, VertexSize);
+        }
+
+        public static void RemapIndexBuffer(uint[] Destination, uint[] Indices, UIntPtr IndexCount, uint[] Remap)
+        {
+            meshopt_remapIndexBuffer(Destination, Indices, IndexCount, Remap);
+        }
+
+        public static void RemapVertexBuffer(IntPtr Destination, IntPtr Vertices, UIntPtr VertexCount, UIntPtr VertexSize, uint[] Remap)
+        {
+            meshopt_remapVertexBuffer(Destination, Vertices, VertexCount, VertexSize, Remap);
+        }
+
+        public static void OptimizeVertexCache(uint[] Destination, uint[] Indices, UIntPtr IndexCount, UIntPtr VertexCount)
+        {
+            meshopt_optimizeVertexCache(Destination, Indices, IndexCount, VertexCount);
+        }
+
+        public static void OptimizeOverdraw(uint[] Destination, uint[] Indices, UIntPtr IndexCount, IntPtr VertexPositions, UIntPtr VertexCount, UIntPtr Stride, float Threshold)
+        {
+            meshopt_optimizeOverdraw(Destination, Indices, IndexCount, VertexPositions, VertexCount, Stride, Threshold);
+        }
+
+        public static uint OptimizeVertexFetch(IntPtr Destination, uint[] Indices, UIntPtr IndexCount, IntPtr Vertices, UIntPtr VertexCount, UIntPtr VertexSize)
+        {
+            return meshopt_optimizeVertexFetch(Destination, Indices, IndexCount, Vertices, VertexCount, VertexSize);
+        }
+
+        public static uint Simplify(uint[] Destination, uint[] Indices, UIntPtr IndexCount, IntPtr VertexPositions, UIntPtr VertexCount, UIntPtr VertexPositionsStride, UIntPtr TargetIndexCount, float TargetError, UIntPtr Options, IntPtr ResultError)
+        {
+            return meshopt_simplify(Destination, Indices, IndexCount, VertexPositions, VertexCount, VertexPositionsStride, TargetIndexCount, TargetError, Options, ResultError);
+        }
+
+        public static uint SimplifySloppy(uint[] Destination, uint[] Indices, UIntPtr IndexCount, IntPtr VertexPositions, UIntPtr VertexCount, UIntPtr VertexPositionsStride, UIntPtr TargetIndexCount, float TargetError, UIntPtr Options, IntPtr ResultError)
+        {
+            return meshopt_simplifySloppy(Destination, Indices, IndexCount, VertexPositions, VertexCount, VertexPositionsStride, TargetIndexCount, TargetError, Options, ResultError);
+        }
+    }
+
+    internal class Pointer
+    {
+        private GCHandle _handle;
+        public IntPtr Address { get; private set; }
+
+        private Pointer()
+        {
+        }
+
+        public void Free()
+        {
+            _handle.Free();
+        }
+
+        public static Pointer Create<T>(T Object)
+        {
+            var pointer = new Pointer
+            {
+                _handle = GCHandle.Alloc(Object, GCHandleType.Pinned)
+            };
+            pointer.Address = pointer._handle.AddrOfPinnedObject();
+            return pointer;
+        }
+    }
+}
+
+//===== Model\SimplePrimitivesImplementation.cs =====
+
+using AIAgent.Structures;
+using Autodesk.Navisworks.Api.Interop.ComApi;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace AIAgent.Model
+{
+    class SimplePrimitivesImplementation : InwSimplePrimitivesCB
+    {
+        public List<Point> Vertices;
+        public List<Line> Lines;
+
+        public void Point(InwSimpleVertex v1)
+        {
+
+        }
+
+        public void SnapPoint(InwSimpleVertex v1)
+        {
+
+        }
+
+        public void Line(InwSimpleVertex v1, InwSimpleVertex v2)
+        {
+            set_lines((Array)(object)v1.coord, (Array)(object)v2.coord);
+        }
+
+        public void Triangle(InwSimpleVertex v1, InwSimpleVertex v2, InwSimpleVertex v3)
+        {
+            set_vertices((Array)(object)v1.coord, (Array)(object)v2.coord, (Array)(object)v3.coord);
+        }
+
+        private void set_lines(Array point1, Array point2)
+        {
+            Point[] points = new Point[2];
+            points[0] = (new Point((float)(object)point1.GetValue(1), (float)(object)point1.GetValue(2), (float)(object)point1.GetValue(3)));
+            points[1] = (new Point((float)(object)point2.GetValue(1), (float)(object)point2.GetValue(2), (float)(object)point2.GetValue(3)));
+            Lines.Add(new Line() { Points = points });
+        }
+
+        private void set_vertices(Array point1, Array point2, Array point3)
+        {
+            Vertices.Add(new Point((float)(object)point1.GetValue(1), (float)(object)point1.GetValue(2), (float)(object)point1.GetValue(3)));
+            Vertices.Add(new Point((float)(object)point2.GetValue(1), (float)(object)point2.GetValue(2), (float)(object)point2.GetValue(3)));
+            Vertices.Add(new Point((float)(object)point3.GetValue(1), (float)(object)point3.GetValue(2), (float)(object)point3.GetValue(3)));
+        }
+    }
+}
+
+//===== Properties\AssemblyInfo.cs =====
+
+using System.Reflection;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+
+// Общие сведения об этой сборке предоставляются следующим набором
+// набора атрибутов. Измените значения этих атрибутов для изменения сведений,
+// связанные со сборкой.
+[assembly: AssemblyTitle("AIAgent")]
+[assembly: AssemblyDescription("")]
+[assembly: AssemblyConfiguration("")]
+[assembly: AssemblyCompany("")]
+[assembly: AssemblyProduct("AIAgent")]
+[assembly: AssemblyCopyright("Copyright ©  2026")]
+[assembly: AssemblyTrademark("")]
+[assembly: AssemblyCulture("")]
+
+// Установка значения False для параметра ComVisible делает типы в этой сборке невидимыми
+// для компонентов COM. Если необходимо обратиться к типу в этой сборке через
+// COM, задайте атрибуту ComVisible значение TRUE для этого типа.
+[assembly: ComVisible(false)]
+
+// Следующий GUID служит для идентификации библиотеки типов, если этот проект будет видимым для COM
+[assembly: Guid("377d6012-de14-4100-adc3-d2d50b0fc8a1")]
+
+// Сведения о версии сборки состоят из указанных ниже четырех значений:
+//
+//      Основной номер версии
+//      Дополнительный номер версии
+//      Номер сборки
+//      Редакция
+//
+[assembly: AssemblyVersion("1.0.0.0")]
+[assembly: AssemblyFileVersion("1.0.0.0")]
+
+//===== Structures\Element.cs =====
+
+using Autodesk.Navisworks.Api;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using System.Windows.Media;
+
+namespace AIAgent.Structures
+{
+    public class Element
+    {
+        public string PartitionName;
+        public string SourceFileName;
+        public double Measurement;
+        public Geometry Geometry;
+        public int VetexCount;
+        public ModelItem ModelItem;
+        public int PropertyId;
+        public List<PropertyCategory> PropertyCategories;
+
+        public Element(ModelItem item)
+        {
+            foreach (ModelItem part in item.Ancestors)
+            {
+                if (part.HasModel)
+                {
+                    //Measurement = Structures.Measurement.GetValue(part.Model.Units.ToString());
+                    //LcOaPartition partition = LcOpState.GetActiveInstance().PathToUnitPartition(item);
+                    //string name;
+                    //partition.GetSwigUserName(out name);
+                    //var scn = partition.GetSwigClassName();
+                    //var file_name = partition.GetFilename();
+                    ////var trans3d = partition.GetFileTransform();
+                    //var crearor = partition.GetCreator();
+                    //var uv = partition.GetFrontVector();
+                    //var sour_file = partition.GetSourceFilename();
+
+                    //var dtatproperty = part.PropertyCategories.FindPropertyByCombinedName(new NamedConstant("LcOaNode", "Элемент"), new NamedConstant("LcOaNode", "Элемент"));
+
+                    PartitionName = part.DisplayName;
+                    SourceFileName = part.Model.SourceFileName;
+
+                    break;
+                }
+            }
+        }
+    }
+}
+
+//===== Structures\ElementDto.cs =====
+
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace AIAgent.Structures
+{
+    public class ElementDto
+    {
+        public class Property
+        {
+            public string Name { get; set; }
+            public string Value { get; set; }
+        }
+
+        public string Name { get; set; }
+        public List<Property> Properties { get; set; } = new List<Property>();
+
+        public ElementDto(Element element)
+        {
+            this.Name = element.ModelItem.DisplayName;
+
+            if(element.PropertyCategories != null)
+                foreach (var category in element.PropertyCategories)
+                {
+                    foreach (var property in category.Properties)
+                    {
+                        Properties.Add(new Property
+                        {
+                            Name = property.DisplayName,
+                            Value = property.Value.ToString()
+                        });
+                    }
+                }
+        }
+    }
+}
+
+//===== Structures\Fragment.cs =====
+
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Shapes;
+
+namespace AIAgent.Structures
+{
+    public class Fragment
+    {
+        public double[] Matrix;
+        public Tuple<Point[], uint[]> Triangles;
+        public Point[] Vertices;
+        public Line[] Lines;
+        public Point[] Points;
+        public Point[] SnapPoints;
+    }
+}
+
+//===== Structures\Geometry.cs =====
+
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace AIAgent.Structures
+{
+    public class Geometry
+    {
+        public double[] Color;
+        public double[] BoundingBox;
+        public double Transparency;
+        public List<Fragment> Fragments;
+    }
+}
+
+//===== Structures\Line.cs =====
+
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using System.Windows;
+
+namespace AIAgent.Structures
+{
+    public class Line
+    {
+        public Point[] Points;
+    }
+}
+
+//===== Structures\Measurement.cs =====
+
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace AIAgent.Structures
+{
+    public class Measurement
+    {
+        public static double GetValue(string type)
+        {
+            switch (type)
+            {
+                case "Meters":
+                    return Meters;
+                case "Centimeters":
+                    return Centimeters;
+                case "Millimeters":
+                    return Millimeters;
+                case "Feet":
+                    return Feet;
+                case "Inches":
+                    return Inches;
+                case "Yards":
+                    return Yards;
+                case "Kilometers":
+                    return Kilometers;
+                case "Miles":
+                    return Miles;
+                case "Micrometers":
+                    return Micrometers;
+                case "Mils":
+                    return Mils;
+                case "Microinches":
+                    return Microinches;
+                default:
+                    return 1;
+            }
+        }
+
+        private static double Meters = 1000;
+        private static double Centimeters = 10;
+        private static double Millimeters = 1;
+        private static double Feet = 304.8;
+        private static double Inches = 25.4;
+        private static double Yards = 914.4;
+        private static double Kilometers = 1000000;
+        private static double Miles = 1609344;
+        private static double Micrometers = 0.001;
+        private static double Mils = 0.0254;
+        private static double Microinches = 2.54;
+    }
+}
+
+//===== Structures\Point.cs =====
+
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace AIAgent.Structures
+{
+    public struct Point
+    {
+        public const int SizeInBytes = sizeof(float) * 3;
+        public const int Stride = SizeInBytes;
+        public float X { get; }
+        public float Y { get; }
+        public float Z { get; }
+        public Point(float X, float Y, float Z)
+        {
+            this.X = X;
+            this.Y = Y;
+            this.Z = Z;
+        }
+    }
+}
+
+//===== UI\DialogUI.xaml.cs =====
+
+using AIAgent.Model;
+using AIAgent.Structures;
+using AIAgentLib;
+using Autodesk.Navisworks.Api;
+using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Input;
+using System.Windows.Interop;
+using System.Windows.Media;
+using static System.Net.Mime.MediaTypeNames;
+
+namespace AIAgent.UI
+{
+    public class Message : INotifyPropertyChanged
+    {
+        private string _text;
+        public bool IsUser { get; set; }
+
+        public string Text
+        {
+            get => _text;
+            set { _text = value; OnPropertyChanged(); }
+        }
+
+        public event PropertyChangedEventHandler PropertyChanged;
+        protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = null) =>
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    }
+
+    public class UserBackgroundConverter : System.Windows.Data.IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+        {
+            if (value is bool isUser && isUser)
+                return new SolidColorBrush(Colors.LightBlue);
+            return new SolidColorBrush(Colors.LightGray);
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture) =>
+            throw new NotImplementedException();
+    }
+
+    public partial class DialogUI : Window
+    {
+        private readonly OllamaClientWrapper _aiClient;
+        private CancellationTokenSource _cts;
+        private bool _isBusy;
+
+        public ObservableCollection<Message> Messages { get; } = new ObservableCollection<Message>();
+
+        public bool IsBusy
+        {
+            get => _isBusy;
+            set { _isBusy = value; OnPropertyChanged(); OnPropertyChanged(nameof(IsNotBusy)); }
+        }
+        public bool IsNotBusy => !IsBusy;
+
+        public DialogUI()
+        {
+            InitializeComponent();
+            DataContext = this;
+            _aiClient = new OllamaClientWrapper(Configuration.Instance.OllamaUrl, Configuration.Instance.ModelName);
+            Loaded += async (s, e) =>
+            {
+                txtInput.Focus();
+                //await HandlerModel();
+            };
+        }
+
+        private async void btnSend_Click(object sender, RoutedEventArgs e)
+        {
+            await SendMessageAsync();
+        }
+
+        private async void txtInput_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Enter && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+            {
+                e.Handled = true;
+                await SendMessageAsync();
+            }
+        }
+
+        /// <summary>
+        /// Прокручивает внешний ScrollViewer до самого низа.
+        /// Использует Dispatcher для отложенного выполнения после перерисовки.
+        /// </summary>
+        private void ScrollToEnd()
+        {
+            Dispatcher.BeginInvoke(
+                new Action(() =>
+                {
+                    // Прокручиваем внешний скроллер до конца
+                    MainScrollViewer.ScrollToEnd();
+                }),
+                System.Windows.Threading.DispatcherPriority.Background);
+        }
+
+        /// <summary>
+        /// Единый метод отправки сообщения. Если text == null, текст берётся из txtInput.
+        /// </summary>
+        private async Task SendMessageAsync(string text = null)
+        {
+            // Если текст не передан, берём из поля ввода
+            if (string.IsNullOrEmpty(text))
+                text = txtInput.Text.Trim();
+
+            if (string.IsNullOrEmpty(text) || IsBusy)
+                return;
+
+            // Если текст передан извне (не из поля ввода), не очищаем поле
+            if (text == txtInput.Text.Trim())
+                txtInput.Clear();
+
+            Messages.Add(new Message { IsUser = true, Text = text });
+            txtInput.IsEnabled = false;
+            btnSend.IsEnabled = false;
+            IsBusy = true;
+
+            _cts = new CancellationTokenSource();
+
+            try
+            {
+                var assistantMessage = new Message { IsUser = false, Text = "" };
+                Messages.Add(assistantMessage);
+
+                await _aiClient.GetStreamingResponseAsync(
+                    text,
+                    token =>
+                    {
+                        assistantMessage.Text += token;
+                        ScrollToEnd();
+                    },
+                    _cts.Token);
+
+                ScrollToEnd(); // финальная прокрутка
+            }
+            catch (OperationCanceledException)
+            {
+                var last = Messages.Count > 0 ? Messages[Messages.Count - 1] : null;
+                if (last != null && !last.IsUser)
+                    last.Text += " (отменено)";
+                ScrollToEnd();
+            }
+            catch (Exception ex)
+            {
+                var last = Messages.Count > 0 ? Messages[Messages.Count - 1] : null;
+                if (last != null && !last.IsUser)
+                    last.Text = $"Ошибка: {ex.Message}";
+                else
+                    Messages.Add(new Message { IsUser = false, Text = $"Ошибка: {ex.Message}" });
+                ScrollToEnd();
+            }
+            finally
+            {
+                _cts?.Dispose();
+                _cts = null;
+                IsBusy = false;
+                txtInput.IsEnabled = true;
+                btnSend.IsEnabled = true;
+                txtInput.Focus();
+            }
+        }
+
+        private void CancelButton_Click(object sender, RoutedEventArgs e)
+        {
+            _cts?.Cancel();
+        }
+
+        public event PropertyChangedEventHandler PropertyChanged;
+        protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = null) =>
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+
+
+        private async Task HandlerModel()
+        {
+            try
+            {
+                var elements = await Task.Run(() => new GeometryExtractor().Run());
+                if (elements == null) return;
+
+                var elementDtos = new List<ElementDto>();
+                foreach (var item in elements)
+                {
+                    var extracted = new InformationExtractor(item.Value).GetElements();
+                    foreach (var elem in extracted)
+                    {
+                        var dto = new ElementDto(elem);
+                        if (dto.Properties.Count > 0)
+                            elementDtos.Add(dto);
+                    }
+                }
+
+                var json = Configuration.Instance.GetJson(elementDtos);
+                await SendMessageAsync(json);
+            }
+            catch (Exception ex)
+            {
+                Messages.Add(new Message { IsUser = false, Text = $"Ошибка: {ex.Message}" });
+                ScrollToEnd();
+            }
+        }
+    }
+}

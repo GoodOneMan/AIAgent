@@ -1,0 +1,7 @@
+{
+  "OllamaUrl": "http://192.168.2.162:11434",
+  "ModelName": "qwen2.5-coder:14b",
+  "Optimization": 0,
+  "GeometryHandler": 0,
+  "Categories": [ "LcOaPropOverrideCat:MicroStation_Object", "LcOaPropOverrideCat:MicroStation_PipingSystem", "LcIFCProperty:ArchiCADProperties" ]
+}

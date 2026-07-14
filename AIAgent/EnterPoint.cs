@@ -1,9 +1,14 @@
-﻿using Autodesk.Navisworks.Api.Plugins;
+﻿using AIAgent.Model;
+using AIAgent.Structures;
+using Autodesk.Navisworks.Api;
+using Autodesk.Navisworks.Api.Plugins;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Windows;
+using System.Xml.Linq;
 
 namespace AIAgent
 {
@@ -15,11 +20,15 @@ namespace AIAgent
     [Command("ID_AI_Agent", LargeIcon = @"Images\ai_icon.ico", ToolTip = "агент")]
     public class EnterPoint : CommandHandlerPlugin
     {
+        public EnterPoint() 
+        {
+            LoadDependencies();
+        }
+
         public override int ExecuteCommand(string commandId, params string[] parameters)
         {
             if (commandId == "ID_AI_Agent")
             {
-                LoadDependencies();
                 ShowDialog();
             }
             return 0;

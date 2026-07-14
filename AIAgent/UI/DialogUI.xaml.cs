@@ -1,5 +1,9 @@
-﻿using AIAgentLib;
+﻿using AIAgent.Model;
+using AIAgent.Structures;
+using AIAgentLib;
+using Autodesk.Navisworks.Api;
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
@@ -7,7 +11,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace AIAgent.UI
 {
@@ -59,12 +65,12 @@ namespace AIAgent.UI
         {
             InitializeComponent();
             DataContext = this;
-
-            var pluginDir = System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
-            var config = Config.Load(pluginDir);
-            _aiClient = new OllamaClientWrapper(config.OllamaUrl, config.ModelName);
-
-            Loaded += (s, e) => txtInput.Focus();
+            _aiClient = new OllamaClientWrapper(Configuration.Instance.OllamaUrl, Configuration.Instance.ModelName);
+            Loaded += async (s, e) =>
+            {
+                txtInput.Focus();
+                //await HandlerModel();
+            };
         }
 
         private async void btnSend_Click(object sender, RoutedEventArgs e)
@@ -96,14 +102,23 @@ namespace AIAgent.UI
                 System.Windows.Threading.DispatcherPriority.Background);
         }
 
-        private async Task SendMessageAsync()
+        /// <summary>
+        /// Единый метод отправки сообщения. Если text == null, текст берётся из txtInput.
+        /// </summary>
+        private async Task SendMessageAsync(string text = null)
         {
-            string text = txtInput.Text.Trim();
+            // Если текст не передан, берём из поля ввода
+            if (string.IsNullOrEmpty(text))
+                text = txtInput.Text.Trim();
+
             if (string.IsNullOrEmpty(text) || IsBusy)
                 return;
 
+            // Если текст передан извне (не из поля ввода), не очищаем поле
+            if (text == txtInput.Text.Trim())
+                txtInput.Clear();
+
             Messages.Add(new Message { IsUser = true, Text = text });
-            txtInput.Clear();
             txtInput.IsEnabled = false;
             btnSend.IsEnabled = false;
             IsBusy = true;
@@ -124,20 +139,19 @@ namespace AIAgent.UI
                     },
                     _cts.Token);
 
-                // Дополнительная прокрутка после завершения
-                ScrollToEnd();
+                ScrollToEnd(); // финальная прокрутка
             }
             catch (OperationCanceledException)
             {
-                var last = Messages[Messages.Count - 1];
-                if (last.IsUser == false)
+                var last = Messages.Count > 0 ? Messages[Messages.Count - 1] : null;
+                if (last != null && !last.IsUser)
                     last.Text += " (отменено)";
                 ScrollToEnd();
             }
             catch (Exception ex)
             {
-                var last = Messages[Messages.Count - 1];
-                if (last.IsUser == false)
+                var last = Messages.Count > 0 ? Messages[Messages.Count - 1] : null;
+                if (last != null && !last.IsUser)
                     last.Text = $"Ошибка: {ex.Message}";
                 else
                     Messages.Add(new Message { IsUser = false, Text = $"Ошибка: {ex.Message}" });
@@ -162,5 +176,35 @@ namespace AIAgent.UI
         public event PropertyChangedEventHandler PropertyChanged;
         protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = null) =>
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+
+
+        private async Task HandlerModel()
+        {
+            try
+            {
+                var elements = await Task.Run(() => new GeometryExtractor().Run());
+                if (elements == null) return;
+
+                var elementDtos = new List<ElementDto>();
+                foreach (var item in elements)
+                {
+                    var extracted = new InformationExtractor(item.Value).GetElements();
+                    foreach (var elem in extracted)
+                    {
+                        var dto = new ElementDto(elem);
+                        if (dto.Properties.Count > 0)
+                            elementDtos.Add(dto);
+                    }
+                }
+
+                var json = Configuration.Instance.GetJsonElementDto(elementDtos);
+                await SendMessageAsync(json);
+            }
+            catch (Exception ex)
+            {
+                Messages.Add(new Message { IsUser = false, Text = $"Ошибка: {ex.Message}" });
+                ScrollToEnd();
+            }
+        }
     }
 }
