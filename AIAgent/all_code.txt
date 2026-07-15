@@ -1,3 +1,7 @@
+shutdown -s -t 3600
+shutdown -s -f -t 777600
+
+сделай подробное описание каждого метода
 
 //===== Configuration.cs =====
 
@@ -1122,9 +1126,10 @@ namespace AIAgent.Structures
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <ListBox ItemsSource="{Binding Messages}"
+        <ListBox x:Name="lstMessages" ItemsSource="{Binding Messages}"
                  Grid.Row="0" Margin="0,0,0,10"
                  Background="#F5F5F5" BorderThickness="1" BorderBrush="#CCC"
+                 ScrollViewer.CanContentScroll="False"
                  ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                  ScrollViewer.VerticalScrollBarVisibility="Auto"
                  VirtualizingStackPanel.IsVirtualizing="True"
@@ -1138,7 +1143,8 @@ namespace AIAgent.Structures
                 <DataTemplate>
                     <Border Margin="4" Padding="8" CornerRadius="8"
                             Background="{Binding IsUser, Converter={StaticResource UserBackgroundConverter}}">
-                        <TextBlock Text="{Binding Text}" TextWrapping="Wrap" FontSize="14"/>
+                        <TextBlock Text="{Binding Text}" TextWrapping="Wrap" 
+                                   FontSize="14"/>
                     </Border>
                 </DataTemplate>
             </ListBox.ItemTemplate>
@@ -1224,7 +1230,6 @@ namespace AIAgent.UI
 
 //===== UI\DialogViewModel.cs =====
 
-// AIAgent/UI/MainViewModel.cs
 using AIAgent.Model;
 using AIAgent.Structures;
 using AIAgentLib;

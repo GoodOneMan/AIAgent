@@ -33,6 +33,7 @@ namespace AIAgent.UI
             }
         }
 
+        // Рекурсивно ищет дочерний элемент указанного типа в визуальном дереве. Используется для получения ScrollViewer внутри ListBox.
         private static T FindVisualChild<T>(DependencyObject parent) where T : DependencyObject
         {
             for (int i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(parent); i++)

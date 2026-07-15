@@ -7,7 +7,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Forms.Integration;
+using System.Windows.Interop;
 using System.Xml.Linq;
 
 namespace AIAgent
@@ -38,8 +41,11 @@ namespace AIAgent
         {
             try
             {
-                var dialog = new UI.DialogUI();
-                dialog.ShowDialog();
+                Window dialog = new UI.DialogUI();
+                ElementHost.EnableModelessKeyboardInterop(dialog);
+                dialog.Show();
+
+
             }
             catch (Exception ex)
             {

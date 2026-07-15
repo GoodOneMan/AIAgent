@@ -49,20 +49,31 @@
 
         <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <TextBox x:Name="txtInput" Grid.Column="0" Margin="0,0,10,0"
-                     Text="{Binding InputText, UpdateSourceTrigger=PropertyChanged}"
-                     ScrollViewer.VerticalScrollBarVisibility="Auto"
-                     FontSize="14" VerticalContentAlignment="Center"
-                     KeyDown="txtInput_KeyDown" AcceptsReturn="True"
-                     MaxHeight="90" TextWrapping="Wrap"
-                     IsEnabled="{Binding IsNotBusy}"/>
-            <Button Grid.Column="1" Content="Отправить"
-                    Command="{Binding SendCommand}"
-                    Padding="15,8" FontSize="14" IsDefault="True"
-                    IsEnabled="{Binding IsNotBusy}"/>
+
+            <!-- Кнопка загрузки модели -->
+            <Button Grid.Column="0" Content="📂 Загрузить модель"
+            Command="{Binding LoadModelCommand}"
+            Padding="10,8" Margin="0,0,10,0"
+            FontSize="14"
+            IsEnabled="{Binding IsNotBusy}"
+            ToolTip="Извлечь геометрию и свойства выделенных элементов"/>
+
+            <TextBox x:Name="txtInput" Grid.Column="1" Margin="0,0,10,0"
+             Text="{Binding InputText, UpdateSourceTrigger=PropertyChanged}"
+             ScrollViewer.VerticalScrollBarVisibility="Auto"
+             FontSize="14" VerticalContentAlignment="Center"
+             KeyDown="txtInput_KeyDown" AcceptsReturn="True"
+             MaxHeight="90" TextWrapping="Wrap"
+             IsEnabled="{Binding IsNotBusy}"/>
+
+            <Button Grid.Column="2" Content="Отправить"
+            Command="{Binding SendCommand}"
+            Padding="15,8" FontSize="14" IsDefault="True"
+            IsEnabled="{Binding IsNotBusy}"/>
         </Grid>
     </Grid>
 </Window>
