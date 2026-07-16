@@ -26,10 +26,29 @@
                  VirtualizingStackPanel.VirtualizationMode="Recycling">
             <ListBox.ItemsPanel>
                 <ItemsPanelTemplate>
-                    <VirtualizingStackPanel />
+                    <VirtualizingStackPanel VirtualizationMode="Recycling"
+                                    IsVirtualizing="True"
+                                    ScrollUnit="Pixel" />
                 </ItemsPanelTemplate>
             </ListBox.ItemsPanel>
             <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <Border Margin="4" Padding="8" CornerRadius="8"
+                        Background="{Binding IsUser, Converter={StaticResource UserBackgroundConverter}}">
+                        <TextBox Text="{Binding Text}" 
+                             TextWrapping="Wrap" 
+                             FontSize="14"
+                             IsReadOnly="True"
+                             Background="Transparent"
+                             BorderThickness="0"
+                             CaretBrush="Transparent"
+                             FocusVisualStyle="{x:Null}"
+                             IsTabStop="False"
+                             Cursor="IBeam" />
+                    </Border>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+            <!--<ListBox.ItemTemplate>
                 <DataTemplate>
                     <Border Margin="4" Padding="8" CornerRadius="8"
                             Background="{Binding IsUser, Converter={StaticResource UserBackgroundConverter}}">
@@ -37,7 +56,7 @@
                                    FontSize="14"/>
                     </Border>
                 </DataTemplate>
-            </ListBox.ItemTemplate>
+            </ListBox.ItemTemplate>-->
         </ListBox>
 
         <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,5"

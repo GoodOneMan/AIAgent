@@ -3,6 +3,7 @@ using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace AIAgent
 {
@@ -33,6 +34,8 @@ namespace AIAgent
             return new Configuration();
         }
 
+        
+
         public string OllamaUrl { get; set; } = "http://192.168.2.162:11434";
         public string ModelName { get; set; } = "qwen2.5-coder:14b";
         public int GeometryHandler { get; set; } = 1;
@@ -51,6 +54,40 @@ namespace AIAgent
                 System.Diagnostics.Trace.WriteLine($"Ошибка сериализации: {ex.Message}");
                 return string.Empty;
             }
+        }
+
+        //hf.co/yuxinlu1/gemma-4-12B-coder-fable5-composer2.5-v1-GGUF:Q8_0
+        //hf.co/google/gemma-4-12B-it-qat-q4_0-gguf:Q4_0
+        //hf.co/huihui-ai/Huihui-Qwythos-9B-Claude-Mythos-5-1M-abliterated-GGUF:Q8_0
+        //hf.co/yuxinlu1/gemma-4-12B-agentic-fable5-composer2.5-v2-3.5x-tau2-GGUF:Q8_0
+        //hf.co/empero-ai/Qwythos-9B-Claude-Mythos-5-1M-GGUF:Q4_K_M
+        //hf.co/empero-ai/Qwythos-9B-Claude-Mythos-5-1M-GGUF:Q8_0
+        //gemma4-heavy:latest
+        //gemma4-abliterated:latest
+        //nomic-embed-text:latest
+        //qwen2.5:7b
+        //qwen2.5:14b
+        //gemma3:12b
+        //deepseek-r1:14b
+        //qwen2.5-coder:14b
+        public string[] GetModelsName()
+        {
+            return new string[] {
+                "hf.co/yuxinlu1/gemma-4-12B-coder-fable5-composer2.5-v1-GGUF:Q8_0",
+                "hf.co/google/gemma-4-12B-it-qat-q4_0-gguf:Q4_0",
+                "hf.co/huihui-ai/Huihui-Qwythos-9B-Claude-Mythos-5-1M-abliterated-GGUF:Q8_0",
+                "hf.co/yuxinlu1/gemma-4-12B-agentic-fable5-composer2.5-v2-3.5x-tau2-GGUF:Q8_0",
+                "hf.co/empero-ai/Qwythos-9B-Claude-Mythos-5-1M-GGUF:Q4_K_M",
+                "hf.co/empero-ai/Qwythos-9B-Claude-Mythos-5-1M-GGUF:Q8_0",
+                "gemma4-heavy:latest",
+                "gemma4-abliterated:latest",
+                "nomic-embed-text:latest",
+                "qwen2.5:7b",
+                "qwen2.5:14b",
+                "gemma3:12b",
+                "deepseek-r1:14b",
+                "qwen2.5-coder:14b"
+            };
         }
     }
 }

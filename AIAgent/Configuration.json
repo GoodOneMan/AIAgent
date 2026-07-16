@@ -1,7 +1,7 @@
 {
   "OllamaUrl": "http://192.168.2.162:11434",
-  "ModelName": "qwen2.5-coder:14b",
+  "ModelName": "hf.co/huihui-ai/Huihui-Qwythos-9B-Claude-Mythos-5-1M-abliterated-GGUF:Q8_0",
   "Optimization": 0,
-  "GeometryHandler": 0,
+  "GeometryHandler": 1,
   "Categories": [ "LcOaPropOverrideCat:MicroStation_Object", "LcOaPropOverrideCat:MicroStation_PipingSystem", "LcIFCProperty:ArchiCADProperties" ]
 }
