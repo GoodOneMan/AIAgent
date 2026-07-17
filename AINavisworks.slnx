@@ -1,4 +1,5 @@
 <Solution>
   <Project Path="AIAgent/AIAgent.csproj" Id="377d6012-de14-4100-adc3-d2d50b0fc8a1" />
   <Project Path="AIAgentLib/AIAgentLib.csproj" Id="c174f108-ddef-4e97-9c64-45c9bb01b8b0" />
+  <Project Path="ModelBenchmark/ModelBenchmark.csproj" Id="40ec60c2-1e72-4efa-9f0e-a3f431f13ab0" />
 </Solution>
